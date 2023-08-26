@@ -1,0 +1,19 @@
+{
+  "name": "wumpus",
+  "version": "0.0.1",
+  "description": "A Discord API wrapper",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TrigamDev/wumpus.js.git"
+  },
+  "author": "ixNoah, Trigam",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/TrigamDev/wumpus.js/issues"
+  },
+  "homepage": "https://github.com/TrigamDev/wumpus.js#readme"
+}
