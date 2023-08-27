@@ -20,7 +20,6 @@ export default class Client {
         if (!gatewayInfo || !gatewayInfo.url) {
             throw new Error('Failed to fetch gateway information');
         };
-        //     client_id: '1145091520593149972',
         this.webSocket.start(gatewayInfo.url);
     };
 
