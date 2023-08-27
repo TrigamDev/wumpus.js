@@ -15,7 +15,6 @@ export default class WebSocket {
         this.ws = new WebSock(`${gatewayURL}/?v=10&encoding=json`);
 
         this.ws.on('open', () => {
-            console.log('Websocket connection opened');
             this.sendHeartbeat();
             this.sendIdentify();
         });
@@ -32,12 +31,8 @@ export default class WebSocket {
                     }, interval);
                     break;
                 };
-                case opCodes.HeartbeatACK: {
-                    console.log('Heartbeat acknowledged');
-                    break;
-                };
                 default: {
-                    console.log('Received payload: ', payload.op);
+                    console.log(`Received payload: ${payload.op}`);
                     break;
                 };
             };
