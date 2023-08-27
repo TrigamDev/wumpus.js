@@ -4,10 +4,12 @@ import gatewayOpCodes from '../../../types/gatewayOpCodes';
 
 export default class WebSocket {
     private ws: WebSock;
+    private intents: number;
     private token: string;
 
-    constructor(token: string) {
+    constructor(token: string, intents: number) {
         this.token = token;
+        this.intents = intents;
         this.ws = new WebSock(null);
     };
 
@@ -60,7 +62,7 @@ export default class WebSocket {
                     $browser: '',
                     $device: ''
                 },
-                intents: 513,
+                intents: this.intents,
                 shard: [0, 1]
             }
         }));

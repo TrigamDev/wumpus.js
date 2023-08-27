@@ -1,14 +1,17 @@
 import axios from 'axios';
 import WebSocket from './websocket/Websocket';
+import GatewayIntents from '../../types/gatewayIntents';
 
 export default class Client {
     private token: string;
+    private options: ClientOptions;
     private baseURL: string = 'https://discord.com/api';
     private webSocket: WebSocket;
 
-    constructor(token: string) {
+    constructor(token: string, options: ClientOptions) {
         this.token = token;
-        this.webSocket = new WebSocket(this.token);
+        this.options = options;
+        this.webSocket = new WebSocket(this.token, this.intentBits());
     };
 
     public async login(token = this.token) {
@@ -30,4 +33,18 @@ export default class Client {
 
         return response.data;
     };
+
+    private intentBits() {
+        let bits = 0;
+
+        for (const intent in this.options.intents) {
+            bits |= Number(GatewayIntents[intent]);
+        };
+
+        return bits;
+    }
+};
+
+type ClientOptions = {
+    intents: GatewayIntents[],
 };
