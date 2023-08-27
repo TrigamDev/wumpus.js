@@ -25,21 +25,17 @@ export default class Client {
 
     private async getGatewayInfo() {
         const response = await axios.get(`${this.baseURL}/v10/gateway/bot`, {
-            headers: {
-                Authorization: `Bot ${this.token}`
-            },
+            headers: { Authorization: `Bot ${this.token}` },
         });
-
         return response.data;
     };
 
+    // Convert the array of intents into an integer
     private intentBits() {
         let bits = 0;
-
         for (const intent in this.options.intents) {
             bits |= Number(GatewayIntents[intent]);
         };
-
         return bits;
     }
 };

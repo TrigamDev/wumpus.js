@@ -1,5 +1,4 @@
 import WebSock from 'ws';
-import opCodes from '../../../types/gatewayOpCodes';
 import gatewayOpCodes from '../../../types/gatewayOpCodes';
 
 export default class WebSocket {
@@ -24,9 +23,9 @@ export default class WebSocket {
         this.ws.on('message', (data: string) => {
             const payload = JSON.parse(data);
 
-            // THIS IS THE BOT'S HEART, DO NOT TOUCH
             switch (payload.op) {
-                case opCodes.Hello: {
+                // THIS IS THE BOT'S HEART, DO NOT TOUCH
+                case gatewayOpCodes.Hello: {
                     const interval = payload.d.heartbeat_interval;
                     setInterval(() => {
                         this.sendHeartbeat();
@@ -45,9 +44,10 @@ export default class WebSocket {
         });
     };
 
+    // Send a heartbeat payload so the bot doesn't die
     private sendHeartbeat() {
         this.ws.send(JSON.stringify({
-            op: 1,
+            op: gatewayOpCodes.Heartbeat,
             d: null
         }));
     }

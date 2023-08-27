@@ -2,7 +2,7 @@ enum GatewayIntents {
     Guilds = 1 << 0,
     GuildMembers = 1 << 1,
     GuildModeration = 1 << 2,
-    GuildExpressions = 1 << 3,
+    GuildExpressions = 1 << 3, // Went ahead and renamed this one to better match the permissions name
     GuildIntegrations = 1 << 4,
     GuildWebhooks = 1 << 5,
     GuildInvites = 1 << 6,
