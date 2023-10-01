@@ -41,6 +41,14 @@ export default class Shard extends EventEmitter {
                 this.sendIdentify();
                 break
             };
+            case OperationCodes.HeartbeatAcknowledge: {
+                console.log("Heartbeat acknowledged.");
+                break;
+            };
+            case OperationCodes.Dispatch: {
+                console.log("Bot started!");
+                break;
+            };
             default: {
                 console.log("Unhandled payload of code: " + payload.op);
                 break;
