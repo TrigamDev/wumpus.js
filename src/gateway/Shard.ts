@@ -8,6 +8,7 @@ import { UnauthorizedRequest } from "../rest/RequestUtil";
 import { CloseEventCode, CloseEventCodes, OperationCodes } from "../types/GatewayCodes";
 import { GatewayEvents } from "./GatewayEvents";
 import { GatewayError } from "../error/GatewayError";
+import { Color, shardDebugLog } from "../util/DebugLog";
 
 export enum ShardStatus {
     Idle,
@@ -20,13 +21,15 @@ export default class Shard extends EventEmitter {
     public client: Client;
     public id: number;
     public status: ShardStatus = ShardStatus.Idle;
+    private token: string;
     private socket: WebSocket | undefined;
     private websocketURL: string | undefined;
 
-    constructor(client: Client, id: number = 0) {
+    constructor(client: Client, id: number = 0, token: string = "") {
         super();
         this.client = client;
         this.id = id;
+        this.token = token;
     };
 
     public async connect(): Promise<Shard> {
@@ -40,7 +43,7 @@ export default class Shard extends EventEmitter {
         // Handle websocket events
         this.socket.onopen = () => {
             this.status = ShardStatus.Connected;
-            if (this.client.options?.debugLogging) console.log("\u001b[32mOpened websocket connection.\u001b[0m")
+            shardDebugLog(this.client, this.id, `Opened websocket connection.`, Color.Green);
         };
         this.socket.onmessage = (event) => {
             if (event.data.toString().startsWith("{")) this.handlePayload(JSON.parse(event.data.toString()));
@@ -62,12 +65,16 @@ export default class Shard extends EventEmitter {
             };
             case OperationCodes.HeartbeatAcknowledge: {
                 this.emit(GatewayEvents.Heartbeat);
-                if (this.client.options?.debugLogging) console.log("\u001b[33mHeartbeat acknowledged.\u001b[0m");
+                shardDebugLog(this.client, this.id, `Heartbeat acknowledged`, Color.Yellow);
                 break;
             };
             case OperationCodes.Dispatch: {
                 this.emit(GatewayEvents.Ready);
-                if (this.client.options?.debugLogging) console.log("\u001b[32mShard started!\u001b[0m");
+                shardDebugLog(this.client, this.id, `Shard started!`, Color.Green);
+                break;
+            };
+            case OperationCodes.InvalidSession: {
+                if (this.client.options?.debugLogging) console.error("Invalid session!");
                 break;
             };
             default: {
@@ -96,14 +103,14 @@ export default class Shard extends EventEmitter {
         // Check if we should reconnect
         for (let closeEventCode of Object.values(CloseEventCodes)) {
             if (code === closeEventCode.code && closeEventCode.reconnect) {
-                if (this.client.options?.debugLogging) console.error(`mReconnecting...`);
+                if (this.client.options?.debugLogging) console.error(`Reconnecting...`);
                 return this.connect();
             }
         }
     }
 
     private startHeartbeat(interval: number) {
-        if (this.client.options?.debugLogging) console.log("\u001b[30mStarting heartbeat...\u001b[0m")
+        shardDebugLog(this.client, this.id, `Starting heartbeat...`, Color.Black);
         // Add some jitter for the first heartbeat to not cause an influx of traffic
         setTimeout(() => { this.sendHeartbeat(); }, interval * Math.random());
         // IT'S ALIVE
@@ -111,7 +118,7 @@ export default class Shard extends EventEmitter {
     };
 
     private sendHeartbeat() {
-        if (this.client.options?.debugLogging) console.log("\u001b[30mSending heartbeat...\u001b[0m")
+        shardDebugLog(this.client, this.id, `Sending heartbeat...`, Color.Black);
         if (this.socket) {
             this.socket.send(JSON.stringify({
                 op: OperationCodes.Heartbeat,
@@ -121,11 +128,11 @@ export default class Shard extends EventEmitter {
     };
 
     private sendIdentify() {
-        if (this.client.options?.debugLogging) console.log("\u001b[30mSending identify...\u001b[0m")
+        shardDebugLog(this.client, this.id, `Sending identify...`, Color.Black);
         const payload = {
             op: OperationCodes.Identify,
             d: {
-                token: this.client.token,
+                token: this.token,
                 properties: {
                     $os: process.platform,
                     $browser: "Wumpus.js",

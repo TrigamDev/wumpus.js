@@ -7,12 +7,10 @@ import { GatewayEvents } from "../gateway/GatewayEvents";
 
 /**
  * A Wumpus.js client.
- * @param {string} token - The authentication token.
  * @param {number[]} intents - An array of intents.
  * @param {ClientOptions} [options] - The client options.
  */
 export default class Client extends EventEmitter {
-    public token: string;
     public intents: number;
     public options: ClientOptions | undefined;
 
@@ -21,10 +19,8 @@ export default class Client extends EventEmitter {
 
     private readyShards: number;
 
-    constructor(token: string, intents: number[], options?: ClientOptions) {
+    constructor(intents: number[], options?: ClientOptions) {
         super();
-
-        this.token = token;
         this.intents = this.intentBits(intents);
         this.options = options;
 
@@ -32,15 +28,15 @@ export default class Client extends EventEmitter {
         this.readyShards = 0;
     }
 
-    public async login() {
-        const gatewayInfo: BotGatewayInfo = await AuthorizedRequest(BaseUrl + GatewayBot(), this.token) as BotGatewayInfo;
+    public async login(token: string) {
+        const gatewayInfo: BotGatewayInfo = await AuthorizedRequest(BaseUrl + GatewayBot(), token) as BotGatewayInfo;
         // Set the number of shards
         if (this.options?.shardCount) this.shardCount = this.options.shardCount;
         else if (gatewayInfo.shards) this.shardCount = gatewayInfo.shards;
         
         // event formula: shard_id = (guild_id >> 22) % num_shards
         for (let i = 0; i < this.shardCount; i++) {
-            let shard = await new Shard(this, i).connect();
+            let shard = await new Shard(this, i, token).connect();
             this.shards.set(i, shard);
             shard.on(GatewayEvents.Ready, this.handleReady.bind(this));
         }
