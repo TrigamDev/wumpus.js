@@ -3,6 +3,7 @@ import EventEmitter from "eventemitter3";
 import Shard from "../gateway/Shard";
 import { BaseUrl, GatewayBot } from "../rest/Endpoints";
 import { AuthorizedRequest } from "../rest/RequestUtil";
+import { GatewayEvents } from "../gateway/GatewayEvents";
 
 /**
  * A Wumpus.js client.
@@ -16,6 +17,9 @@ export default class Client extends EventEmitter {
     public options: ClientOptions | undefined;
 
     public shards: Map<number, Shard> = new Map();
+    public shardCount: number = 1;
+
+    private readyShards: number;
 
     constructor(token: string, intents: number[], options?: ClientOptions) {
         super();
@@ -25,16 +29,28 @@ export default class Client extends EventEmitter {
         this.options = options;
 
         this.shards = new Map();
+        this.readyShards = 0;
     }
 
     public async login() {
         const gatewayInfo: BotGatewayInfo = await AuthorizedRequest(BaseUrl + GatewayBot(), this.token) as BotGatewayInfo;
         // Set the number of shards
-        let shardCount: number = 1;
-        if (this.options?.shardCount) shardCount = this.options.shardCount;
-        else if (gatewayInfo.shards) shardCount = gatewayInfo.shards;
+        if (this.options?.shardCount) this.shardCount = this.options.shardCount;
+        else if (gatewayInfo.shards) this.shardCount = gatewayInfo.shards;
         
-        this.shards.set(shardCount, await new Shard(this).connect());
+        // event formula: shard_id = (guild_id >> 22) % num_shards
+        for (let i = 0; i < this.shardCount; i++) {
+            let shard = await new Shard(this, i).connect();
+            this.shards.set(i, shard);
+            shard.on(GatewayEvents.Ready, this.handleReady.bind(this));
+        }
+    };
+
+    private async handleReady() {
+        this.readyShards++;
+        if (this.readyShards === this.shardCount) {
+            this.emit('ready');
+        }
     };
 
     private intentBits(intents: number[]) {
@@ -49,6 +65,7 @@ export default class Client extends EventEmitter {
 export interface ClientOptions {
     websocketCompression?: boolean;
     shardCount?: number;
+    debugLogging?: boolean;
     // add more options in the future as needed
 }
 
