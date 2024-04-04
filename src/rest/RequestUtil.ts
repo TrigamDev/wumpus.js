@@ -5,7 +5,7 @@ export async function AuthorizedRequest(url: string, token: string) {
     return await res.json();
 };
 
-export async function UnauthorizedRequest(url: string) {
+export async function UnauthorizedRequest(url: string): Promise<any> {
     const res = await fetch(url);
     return await res.json();
 };

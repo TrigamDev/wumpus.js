@@ -1,15 +1,16 @@
 {
-	"name": "wumpus.js",
-	"module": "index.ts",
-	"type": "module",
-	"devDependencies": {
-		"bun-types": "latest"
-	},
-	"peerDependencies": {
-		"typescript": "^5.0.0"
-	},
-	"dependencies": {
-		"eventemitter3": "^5.0.1",
-		"ws": "^8.14.2"
-	}
+  "name": "wumpus.js",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@types/ws": "^8.5.10",
+    "eventemitter3": "^5.0.1",
+    "ws": "^8.16.0"
+  }
 }

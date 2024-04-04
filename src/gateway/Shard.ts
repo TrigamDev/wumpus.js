@@ -1,5 +1,5 @@
 import EventEmitter from "eventemitter3";
-import { WebSocket } from "ws";
+import { WebSocket, CloseEvent } from "ws";
 
 import Client from "../client/Client";
 import { GatewayVersion } from "../Constants";
@@ -39,28 +39,29 @@ export default class Shard extends EventEmitter {
         this.token = token;
     };
 
-    public async connect(): Promise<Shard> {
-        this.status = ShardStatus.Connecting;
-        // fetch BaseUrl + Gateway and cache it to websocketURL
-        const newURL = await UnauthorizedRequest(BaseUrl + Gateway());
-        this.websocketURL = newURL.url;
-        
-        this.socket = new WebSocket(`${this.websocketURL}/?v=${GatewayVersion}&encoding=json`);
+	public async connect(): Promise<Shard> {
+		shardDebugLog(this.client, this.id, `Connecting...`, Color.Magenta);
+		this.status = ShardStatus.Connecting;
+		// fetch BaseUrl + Gateway and cache it to websocketURL
+		const newURL = await UnauthorizedRequest(BaseUrl + Gateway());
+		this.websocketURL = newURL.url;
 
-        // Handle websocket events
-        this.socket.onopen = () => {
-            this.status = ShardStatus.Connected;
-            shardDebugLog(this.client, this.id, `Opened websocket connection.`, Color.Green);
-        };
-        this.socket.onmessage = (event) => {
-            if (event.data.toString().startsWith("{")) this.handlePayload(JSON.parse(event.data.toString()));
-        };
+		this.socket = new WebSocket(`${this.websocketURL}/?v=${GatewayVersion}&encoding=json`);
+
+		// Handle websocket events
+		this.socket.onopen = () => {
+			this.status = ShardStatus.Connected;
+			shardDebugLog(this.client, this.id, `Opened websocket connection.`, Color.Green);
+		};
+		this.socket.onmessage = (event) => {
+			try { this.handlePayload(JSON.parse(event.data.toString())); } catch (e) { warn(this.client, String(e)); }
+		};
         this.socket.onclose = (event: CloseEvent) => {
             this.handleClose(event);
         }
 
         return this;
-    };
+	};
 
     public async resume(): Promise<Shard> {
         shardDebugLog(this.client, this.id, `Resuming...`, Color.Magenta);
@@ -79,15 +80,16 @@ export default class Shard extends EventEmitter {
     // };
 
     private handlePayload(payload: any) {
-		shardDebugLog(this.client, this.id, `Recieved opcode: ${JSON.stringify(payload.op)}`, Color.Black);
+		//shardDebugLog(this.client, this.id, `Recieved opcode: ${JSON.stringify(payload.op)}`, Color.Black);
         switch (payload.op) {
             case OperationCodes.Hello: {
+                // Event
+                this.emit(GatewayEvents.Hello);
+				shardDebugLog(this.client, this.id, `Hello!`, Color.Green);
                 // Initialize
                 this.heartbeatInterval = payload.d.heartbeat_interval;
                 this.startHeartbeat(this.heartbeatInterval);
                 this.sendIdentify();
-                // Event
-                this.emit(GatewayEvents.Hello);
                 break;
             };
             case OperationCodes.HeartbeatAcknowledge: {
@@ -107,7 +109,7 @@ export default class Shard extends EventEmitter {
                 break;
             };
             case OperationCodes.Reconnect: {
-                shardDebugLog(this.client, this.id, `Recieved Reconnect opcode, reconnecting...`, Color.Yellow);
+                shardDebugLog(this.client, this.id, `Told to reconnect.`, Color.Yellow);
                 this.resume();
                 break;
             }
@@ -138,7 +140,7 @@ export default class Shard extends EventEmitter {
                 break;
             };
             case CloseEventCodes.InvalidShard.code: {
-                throw new GatewayError("Invalid shard!", code, CloseEventCodes.InvalidShard.reconnect);
+                throw new GatewayError("Invalid shard!", this.id, code, CloseEventCodes.InvalidShard.reconnect);
             };
             case null: case undefined: {
                 warn(this.client, "Closed without a code!");
