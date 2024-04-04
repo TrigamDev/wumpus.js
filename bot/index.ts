@@ -5,7 +5,7 @@ const client = new Client(
     [ ],
     {
         websocketCompression: false,
-        shardCount: 2,
+        shardCount: 1,
         debugLogging: true
     }
 );

@@ -10,6 +10,10 @@ export function shardDebugLog(client: Client, shardId: number, message: string, 
     if (client.options?.debugLogging) console.log(`\u001b[36m[Shard #${shardId}]\u001b[0m \u001b[${colorCode}m${message}\u001b[0m`);
 }
 
+export function warn(client: Client, message: string) {
+    if (client.options?.debugLogging) console.warn(`\u001b[33m${message}\u001b[0m`);
+}
+
 export enum Color {
     Black = 30,
     Red = 31,

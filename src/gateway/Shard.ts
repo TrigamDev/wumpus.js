@@ -8,7 +8,7 @@ import { UnauthorizedRequest } from "../rest/RequestUtil";
 import { CloseEventCode, CloseEventCodes, OperationCodes } from "../types/GatewayCodes";
 import { GatewayEvents } from "./GatewayEvents";
 import { GatewayError } from "../error/GatewayError";
-import { Color, shardDebugLog } from "../util/DebugLog";
+import { Color, shardDebugLog, warn } from "../util/DebugLog";
 
 export enum ShardStatus {
     Idle,
@@ -18,12 +18,19 @@ export enum ShardStatus {
 }
 
 export default class Shard extends EventEmitter {
+    // Shard info
     public client: Client;
     public id: number;
     public status: ShardStatus = ShardStatus.Idle;
     private token: string;
+    // Websocket
     private socket: WebSocket | undefined;
     private websocketURL: string | undefined;
+    // Session info
+    private resumeUrl: string | undefined;
+    private sessionId: string | undefined;
+    private lastSequence: number | undefined;
+    private heartbeatInterval: number = 0;
 
     constructor(client: Client, id: number = 0, token: string = "") {
         super();
@@ -55,30 +62,68 @@ export default class Shard extends EventEmitter {
         return this;
     };
 
+    public async resume(): Promise<Shard> {
+        shardDebugLog(this.client, this.id, `Resuming...`, Color.Magenta);
+        this.status = ShardStatus.Resuming;
+
+        // Resume
+        this.websocketURL = this.resumeUrl;
+        this.socket = new WebSocket(`${this.websocketURL}/?v=${GatewayVersion}&encoding=json`);
+        this.socket.onopen = () => { this.sendResume(); };
+
+        return this;
+    };
+
+    // public async disconnect(): Promise<Shard> {
+
+    // };
+
     private handlePayload(payload: any) {
+		shardDebugLog(this.client, this.id, `Recieved opcode: ${JSON.stringify(payload.op)}`, Color.Black);
         switch (payload.op) {
             case OperationCodes.Hello: {
-                this.emit(GatewayEvents.Hello)
-                this.startHeartbeat(payload.d.heartbeat_interval);
+                // Initialize
+                this.heartbeatInterval = payload.d.heartbeat_interval;
+                this.startHeartbeat(this.heartbeatInterval);
                 this.sendIdentify();
-                break
+                // Event
+                this.emit(GatewayEvents.Hello);
+                break;
             };
             case OperationCodes.HeartbeatAcknowledge: {
                 this.emit(GatewayEvents.Heartbeat);
                 shardDebugLog(this.client, this.id, `Heartbeat acknowledged`, Color.Yellow);
                 break;
             };
+            // Ready event
             case OperationCodes.Dispatch: {
+                // Gather session info
+                this.resumeUrl = payload?.d?.resume_gateway_url;
+                this.sessionId = payload?.d?.session_id;
+                this.lastSequence = payload?.s;
+                // Event
                 this.emit(GatewayEvents.Ready);
                 shardDebugLog(this.client, this.id, `Shard started!`, Color.Green);
                 break;
             };
+            case OperationCodes.Reconnect: {
+                shardDebugLog(this.client, this.id, `Recieved Reconnect opcode, reconnecting...`, Color.Yellow);
+                this.resume();
+                break;
+            }
+            case OperationCodes.Resume: {
+                shardDebugLog(this.client, this.id, `Resumed!`, Color.Green);
+                this.emit(GatewayEvents.Resumed);
+                this.status = ShardStatus.Connected;
+                break;
+            }
             case OperationCodes.InvalidSession: {
-                if (this.client.options?.debugLogging) console.error("Invalid session!");
+                warn(this.client, "Invalid session!");
+                if (payload.d === true) this.resume();
                 break;
             };
             default: {
-                if (this.client.options?.debugLogging) console.error("Unhandled payload of code: " + payload.op);
+                warn(this.client, "Unhandled payload of code: " + payload.op);
                 break;
             }
         }
@@ -89,22 +134,26 @@ export default class Shard extends EventEmitter {
         this.emit(GatewayEvents.Closed, { code });
         switch (code) {
             case CloseEventCodes.UnknownError.code: {
-                if (this.client.options?.debugLogging) console.error("An unknown error occured!");
+                warn(this.client, "An unknown error occured!");
                 break;
             };
             case CloseEventCodes.InvalidShard.code: {
                 throw new GatewayError("Invalid shard!", code, CloseEventCodes.InvalidShard.reconnect);
             };
+            case null: case undefined: {
+                warn(this.client, "Closed without a code!");
+                break;
+            }
             default: {
-                if (this.client.options?.debugLogging) console.error(`Unhandled close event code: ${code}`);
+                warn(this.client, `Unhandled close event code: ${code}`);
                 break;
             }
         }
         // Check if we should reconnect
         for (let closeEventCode of Object.values(CloseEventCodes)) {
             if (code === closeEventCode.code && closeEventCode.reconnect) {
-                if (this.client.options?.debugLogging) console.error(`Reconnecting...`);
-                return this.connect();
+                warn(this.client, `Reconnecting...`);
+                return this.resume();
             }
         }
     }
@@ -141,6 +190,19 @@ export default class Shard extends EventEmitter {
                 intents: this.client.intents,
                 compress: this.client.options?.websocketCompression,
                 shard: [this.id, this.client.shardCount]
+            }
+        };
+        // Send out the payload
+        if (this.socket) this.socket.send(JSON.stringify(payload));
+    };
+
+    private sendResume() {
+        const payload = {
+            op: OperationCodes.Resume,
+            d: {
+                token: this.token,
+                session_id: this.sessionId,
+                seq: this.lastSequence
             }
         };
         // Send out the payload
