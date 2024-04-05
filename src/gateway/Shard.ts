@@ -5,10 +5,11 @@ import Client from "../client/Client";
 import { GatewayVersion } from "../Constants";
 import { BaseUrl, Gateway } from "../rest/Endpoints";
 import { UnauthorizedRequest } from "../rest/RequestUtil";
-import { CloseEventCode, CloseEventCodes, OperationCodes } from "../types/GatewayCodes";
+import {GatewayOperationCode, GatewayCloseCode, GatewayCloseEvent, RecoverMethod } from "./GatewayCodes";
 import { GatewayEvents } from "./GatewayEvents";
-import { GatewayError } from "../error/GatewayError";
-import { Color, shardDebugLog, warn } from "../util/DebugLog";
+import { GatewayError } from "./GatewayError";
+import { Color, debugLog, warn } from "../util/DebugLog";
+import { Payload, parsePayload } from "./Payload";
 
 export enum ShardStatus {
     Idle,
@@ -17,6 +18,11 @@ export enum ShardStatus {
     Connected
 }
 
+/**
+ * Represents a self-contained shard, managed by the {@link Client}.
+ * Connects to the Discord Gateway, handles events and payloads, manages
+ * the session, and will reconnect when needed
+ */
 export default class Shard extends EventEmitter {
     // Shard info
     public client: Client;
@@ -24,13 +30,16 @@ export default class Shard extends EventEmitter {
     public status: ShardStatus = ShardStatus.Idle;
     private token: string;
     // Websocket
-    private socket: WebSocket | undefined;
-    private websocketURL: string | undefined;
+    private socket: WebSocket | null = null;
+    private websocketURL: string | null = null;
     // Session info
-    private resumeUrl: string | undefined;
-    private sessionId: string | undefined;
-    private lastSequence: number | undefined;
+	private heartbeatLoop: Timer | null = null;
+	private heartbeatStart: NodeJS.Timeout | null = null;
+    private resumeUrl: string | null = null;
+    private sessionId: string | null = null;
+    private lastSequence: number | null = null;
     private heartbeatInterval: number = 0;
+	private receivedHeartbeatAck: boolean = true;
 
     constructor(client: Client, id: number = 0, token: string = "") {
         super();
@@ -39,8 +48,13 @@ export default class Shard extends EventEmitter {
         this.token = token;
     };
 
+	/**
+	 * @returns {Promise<Shard>}
+	 * @memberof Shard
+	 * @description Connects the shard to the Discord Gateway.
+	 */
 	public async connect(): Promise<Shard> {
-		shardDebugLog(this.client, this.id, `Connecting...`, Color.Magenta);
+		debugLog(this.client, this, `Connecting...`, Color.Magenta);
 		this.status = ShardStatus.Connecting;
 		// fetch BaseUrl + Gateway and cache it to websocketURL
 		const newURL = await UnauthorizedRequest(BaseUrl + Gateway());
@@ -51,10 +65,13 @@ export default class Shard extends EventEmitter {
 		// Handle websocket events
 		this.socket.onopen = () => {
 			this.status = ShardStatus.Connected;
-			shardDebugLog(this.client, this.id, `Opened websocket connection.`, Color.Green);
+			debugLog(this.client, this, `Opened websocket connection.`, Color.Green);
 		};
 		this.socket.onmessage = (event) => {
-			try { this.handlePayload(JSON.parse(event.data.toString())); } catch (e) { warn(this.client, String(e)); }
+			try {
+				let payload: Payload = parsePayload(JSON.parse(event.data.toString()));
+				this.handlePayload(payload);
+			} catch (e) { warn(this.client, this, String(e)); }
 		};
         this.socket.onclose = (event: CloseEvent) => {
             this.handleClose(event);
@@ -63,8 +80,13 @@ export default class Shard extends EventEmitter {
         return this;
 	};
 
+	/**
+	 * @returns {Promise<Shard>}
+	 * @memberof Shard
+	 * @description Resumes the shard's connection to the Discord Gateway.
+	 */
     public async resume(): Promise<Shard> {
-        shardDebugLog(this.client, this.id, `Resuming...`, Color.Magenta);
+        debugLog(this.client, this, `Resuming...`, Color.Magenta);
         this.status = ShardStatus.Resuming;
 
         // Resume
@@ -75,113 +97,170 @@ export default class Shard extends EventEmitter {
         return this;
     };
 
-    // public async disconnect(): Promise<Shard> {
+	/**
+	 * @returns {Promise<Shard>}
+	 * @memberof Shard
+	 * @description Disconnects the shard from the Discord Gateway.
+	 */
+    public async disconnect(closeEvent: GatewayCloseEvent, data: any): Promise<Shard> {
+		debugLog(this.client, this, `Disconnecting...`, Color.Magenta);
+		this.status = ShardStatus.Idle;
+		this.emit(GatewayEvents.Closed);
 
-    // };
+		// Clear intervals
+		if (this.heartbeatStart) clearTimeout(this.heartbeatStart);
+		if (this.heartbeatLoop) clearInterval(this.heartbeatLoop);
+		if (this.socket) {
+			// Clear socket to prevent further messages
+			this.socket.onclose = null;
+			this.socket.onmessage = null;
+			this.socket.close(closeEvent.code, data);
+		};
+		return this;
+    };
 
-    private handlePayload(payload: any) {
-		//shardDebugLog(this.client, this.id, `Recieved opcode: ${JSON.stringify(payload.op)}`, Color.Black);
-        switch (payload.op) {
-            case OperationCodes.Hello: {
+	public async recover(closeEvent: GatewayCloseEvent): Promise<Shard> {
+		switch (closeEvent.recover) {
+			case RecoverMethod.Resume: return this.resume();
+			case RecoverMethod.Reconnect: return this.connect();
+			case RecoverMethod.Disconnect: return this.disconnect(closeEvent, null);
+			default: {
+				warn(this.client, this, `Unknown recover method: ${closeEvent.recover}`);
+				return this;
+			}
+		}
+	};
+
+	/**
+	 * @param payload The incoming payload
+	 * @description Handles incoming payloads from the Discord Gateway.
+	 */
+    private handlePayload(payload: Payload) {
+        switch (payload.code) {
+            case GatewayOperationCode.Hello: {
                 // Event
                 this.emit(GatewayEvents.Hello);
-				shardDebugLog(this.client, this.id, `Hello!`, Color.Green);
+				debugLog(this.client, this, `Hello!`, Color.Green);
                 // Initialize
-                this.heartbeatInterval = payload.d.heartbeat_interval;
+                this.heartbeatInterval = payload.data.heartbeat_interval;
                 this.startHeartbeat(this.heartbeatInterval);
                 this.sendIdentify();
                 break;
             };
-            case OperationCodes.HeartbeatAcknowledge: {
+			case GatewayOperationCode.Heartbeat: {
+				if (!this.receivedHeartbeatAck) warn(this.client, this, `Heartbeat ACK not received! Possibly a zombie connection.`);
+				debugLog(this.client, this, `Heartbeat requested`, Color.Yellow);
+				this.sendHeartbeat();
+				this.receivedHeartbeatAck = false;
+				break;
+			}
+            case GatewayOperationCode.HeartbeatAcknowledge: {
                 this.emit(GatewayEvents.Heartbeat);
-                shardDebugLog(this.client, this.id, `Heartbeat acknowledged`, Color.Yellow);
+                debugLog(this.client, this, `Heartbeat acknowledged`, Color.Yellow);
+				this.receivedHeartbeatAck = true;
                 break;
             };
             // Ready event
-            case OperationCodes.Dispatch: {
+            case GatewayOperationCode.Dispatch: {
                 // Gather session info
-                this.resumeUrl = payload?.d?.resume_gateway_url;
-                this.sessionId = payload?.d?.session_id;
-                this.lastSequence = payload?.s;
+                this.resumeUrl = payload.data.resume_gateway_url;
+                this.sessionId = payload.data.session_id;
+                this.lastSequence = payload.sequence;
                 // Event
                 this.emit(GatewayEvents.Ready);
-                shardDebugLog(this.client, this.id, `Shard started!`, Color.Green);
+                debugLog(this.client, this, `Shard started!`, Color.Green);
                 break;
             };
-            case OperationCodes.Reconnect: {
-                shardDebugLog(this.client, this.id, `Told to reconnect.`, Color.Yellow);
+            case GatewayOperationCode.Reconnect: {
+                debugLog(this.client, this, `Told to reconnect.`, Color.Yellow);
                 this.resume();
                 break;
             }
-            case OperationCodes.Resume: {
-                shardDebugLog(this.client, this.id, `Resumed!`, Color.Green);
+            case GatewayOperationCode.Resume: {
+                debugLog(this.client, this, `Resumed!`, Color.Green);
                 this.emit(GatewayEvents.Resumed);
                 this.status = ShardStatus.Connected;
                 break;
             }
-            case OperationCodes.InvalidSession: {
-                warn(this.client, "Invalid session!");
-                if (payload.d === true) this.resume();
+            case GatewayOperationCode.InvalidSession: {
+                warn(this.client, this, "Invalid session!");
+                if (payload.data === true) this.resume();
+				else this.disconnect(GatewayCloseCode.JustClose, null);
                 break;
             };
             default: {
-                warn(this.client, "Unhandled payload of code: " + payload.op);
-                break;
-            }
+				warn(this.client, this, "Unhandled payload of code: " + payload.code);
+				warn(this.client, this, JSON.stringify(payload));
+				break;
+			}
         }
     };
 
+	/**
+	 * 
+	 * @param event The {@link CloseEvent}
+	 * @description Handles the closing of the websocket connection.
+	 */
     private async handleClose(event: CloseEvent) {
-        let code = event.code;
-        this.emit(GatewayEvents.Closed, { code });
-        switch (code) {
-            case CloseEventCodes.UnknownError.code: {
-                warn(this.client, "An unknown error occured!");
-                break;
+		let closeEvent = this.closeEvent(event.code);
+		if (!closeEvent) closeEvent = { code: event.code, recover: RecoverMethod.Disconnect };
+        this.emit(GatewayEvents.Closed, { code: closeEvent.code, recover: closeEvent.recover });
+        switch (closeEvent.code) {
+			case GatewayCloseCode.Normal.code: { debugLog(this.client, this, "Normal close event.", Color.Black); break; };
+			case GatewayCloseCode.JustClose.code: { debugLog(this.client, this, "Shutting down.", Color.Red); break; };
+            case GatewayCloseCode.UnknownError.code: { warn(this.client, this, "An unknown error occured!"); break; };
+            case GatewayCloseCode.InvalidShard.code: {
+                throw new GatewayError("Invalid shard!", this.id, closeEvent.code, GatewayCloseCode.InvalidShard.recover);
             };
-            case CloseEventCodes.InvalidShard.code: {
-                throw new GatewayError("Invalid shard!", this.id, code, CloseEventCodes.InvalidShard.reconnect);
-            };
-            case null: case undefined: {
-                warn(this.client, "Closed without a code!");
-                break;
-            }
+            case null: case undefined: { warn(this.client, this, "Closed without a code!"); break; }
             default: {
-                warn(this.client, `Unhandled close event code: ${code}`);
+                warn(this.client, this, `Unhandled close event code: ${closeEvent.code}`);
+				warn(this.client, this, JSON.stringify(event));
                 break;
             }
         }
-        // Check if we should reconnect
-        for (let closeEventCode of Object.values(CloseEventCodes)) {
-            if (code === closeEventCode.code && closeEventCode.reconnect) {
-                warn(this.client, `Reconnecting...`);
-                return this.resume();
-            }
-        }
+        // Recovery
+		this.recover(closeEvent);
     }
 
-    private startHeartbeat(interval: number) {
-        shardDebugLog(this.client, this.id, `Starting heartbeat...`, Color.Black);
-        // Add some jitter for the first heartbeat to not cause an influx of traffic
-        setTimeout(() => { this.sendHeartbeat(); }, interval * Math.random());
-        // IT'S ALIVE
-        setInterval(() => { this.sendHeartbeat(); }, interval);
-    };
+	private closeEvent(code: number): GatewayCloseEvent | undefined {
+		for (let closeEventCode of Object.values(GatewayCloseCode)) {
+			if (code === closeEventCode.code) return closeEventCode;
+		}
+	}
 
+	/**
+	 * @param interval The interval to send heartbeats at
+	 * @description Starts the heartbeat interval.
+	 */
+	private startHeartbeat(interval: number) {
+		debugLog(this.client, this, `Starting heartbeat...`, Color.Black);
+		// Add some jitter for the first heartbeat to not cause an influx of traffic
+		this.heartbeatStart = setTimeout(() => { this.sendHeartbeat(); }, interval * Math.random()) as NodeJS.Timeout;
+		// IT'S ALIVE
+		this.heartbeatLoop = setInterval(() => { this.sendHeartbeat(); }, interval);
+	};
+
+	/**
+	 * @description Sends a heartbeat payload to the Discord Gateway.
+	 */
     private sendHeartbeat() {
-        shardDebugLog(this.client, this.id, `Sending heartbeat...`, Color.Black);
+        debugLog(this.client, this, `Sending heartbeat...`, Color.Black);
         if (this.socket) {
             this.socket.send(JSON.stringify({
-                op: OperationCodes.Heartbeat,
+                op: GatewayOperationCode.Heartbeat,
                 d: null
             }));
         }
     };
 
+	/**
+	 * @description Sends an identify payload to the Discord Gateway.
+	 */
     private sendIdentify() {
-        shardDebugLog(this.client, this.id, `Sending identify...`, Color.Black);
+        debugLog(this.client, this, `Sending identify...`, Color.Black);
         const payload = {
-            op: OperationCodes.Identify,
+            op: GatewayOperationCode.Identify,
             d: {
                 token: this.token,
                 properties: {
@@ -198,9 +277,12 @@ export default class Shard extends EventEmitter {
         if (this.socket) this.socket.send(JSON.stringify(payload));
     };
 
+	/**
+	 * @description Sends a resume payload to the Discord Gateway.
+	 */
     private sendResume() {
         const payload = {
-            op: OperationCodes.Resume,
+            op: GatewayOperationCode.Resume,
             d: {
                 token: this.token,
                 session_id: this.sessionId,

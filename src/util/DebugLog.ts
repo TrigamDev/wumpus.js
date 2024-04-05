@@ -1,17 +1,16 @@
 import Client from "../client/Client";
+import Shard from "../gateway/Shard";
 
-export function debugLog(client: Client, message: string, color: Color = Color.Reset, background: BackgroundColor | null = null) {
+export function debugLog(client: Client, shard: Shard | null, message: string, color: Color = Color.Reset, background: BackgroundColor | null = null) {
     let colorCode = background ? `${color};${background}` : `${color}`;
-    if (client.options?.debugLogging) console.log(`\u001b[${colorCode}m${message}\u001b[0m`);
+	let shardPrefix = shard ? `\u001b[36m[Shard #${shard.id}]\u001b[0m ` : '';
+    if (client.options?.debugLogging) console.log(`${shardPrefix}\u001b[${colorCode}m${message}\u001b[0m`);
 }
 
-export function shardDebugLog(client: Client, shardId: number, message: string, color: Color = Color.Reset, background: BackgroundColor | null = null) {
-    let colorCode = background ? `${color};${background}` : `${color}`;
-    if (client.options?.debugLogging) console.log(`\u001b[36m[Shard #${shardId}]\u001b[0m \u001b[${colorCode}m${message}\u001b[0m`);
-}
-
-export function warn(client: Client, message: string) {
-    if (client.options?.debugLogging) console.warn(`\u001b[33m${message}\u001b[0m`);
+export function warn(client: Client, shard: Shard | null, message: string, color: Color = Color.Red, background: BackgroundColor | null = null) {
+	let colorCode = background ? `${color};${background}` : `${color}`;
+	let shardPrefix = shard ? `\u001b[36m[Shard #${shard.id}]\u001b[0m ` : '';
+	if (client.options?.debugLogging) console.warn(`${shardPrefix}\u001b[${colorCode}m${message}\u001b[0m`);
 }
 
 export enum Color {

@@ -1,5 +1,5 @@
 import Client from '../src/client/Client.ts';
-import Intents from '../src/types/Intents.ts';
+import Intents from '../src/client/Intents.ts';
 
 const client = new Client(
     [ ],
