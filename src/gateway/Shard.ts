@@ -166,22 +166,25 @@ export default class Shard extends EventEmitter {
                 this.resumeUrl = payload.data.resume_gateway_url;
                 this.sessionId = payload.data.session_id;
                 this.lastSequence = payload.sequence;
+				if (payload.data.shard) this.id = payload.data.shard[0];
+				// Send up info to the client
+				// user, guilds, application
                 // Event
                 this.emit(GatewayEvents.Ready);
                 debugLog(this.client, this, `Shard started!`, Color.Green);
+                break;
+            };
+			case GatewayOperationCode.Resume: {
+                debugLog(this.client, this, `Resumed!`, Color.Green);
+                this.emit(GatewayEvents.Resumed);
+                this.status = ShardStatus.Connected;
                 break;
             };
             case GatewayOperationCode.Reconnect: {
                 debugLog(this.client, this, `Told to reconnect.`, Color.Yellow);
                 this.resume();
                 break;
-            }
-            case GatewayOperationCode.Resume: {
-                debugLog(this.client, this, `Resumed!`, Color.Green);
-                this.emit(GatewayEvents.Resumed);
-                this.status = ShardStatus.Connected;
-                break;
-            }
+            };
             case GatewayOperationCode.InvalidSession: {
                 warn(this.client, this, "Invalid session!");
                 if (payload.data === true) this.resume();
