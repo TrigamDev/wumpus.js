@@ -11,4 +11,5 @@ export enum GatewayEvents {
 
 export enum DispatchEvents {
 	Ready = 'READY',
+	Resumed = 'RESUMED',
 }

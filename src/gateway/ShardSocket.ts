@@ -10,10 +10,10 @@ import { BaseUrl, Gateway } from "../rest/Endpoints";
 import { DispatchEvents, GatewayEvents } from "./GatewayEvents";
 
 export enum SocketStatus {
-    Idle,
-    Connecting,
-    Resuming,
-    Connected
+	Idle,
+	Connecting,
+	Resuming,
+	Connected
 }
 
 /**
@@ -58,28 +58,28 @@ export default class ShardSocket extends EventEmitter {
 
 		this.websocket = await this.connectToGateway(this.websocketUrl);
 
-        return this;
+		return this;
 	};
 
 	/**
 	 * @description Resumes the shard's connection to the Discord Gateway.
 	 * @returns {Promise<ShardSocket>}
 	 */
-    public async resume(): Promise<ShardSocket> {
-        debugLog(this.shard.client, this.shard, `Resuming...`, Color.Magenta);
-        this.status = SocketStatus.Resuming;
-        // Resume
-        this.websocketUrl = this.resumeUrl;
+	public async resume(): Promise<ShardSocket> {
+		debugLog(this.shard.client, this.shard, `Resuming...`, Color.Magenta);
+		this.status = SocketStatus.Resuming;
+		// Resume
+		this.websocketUrl = this.resumeUrl;
 		this.websocket = await this.connectToGateway(this.resumeUrl);
-        this.websocket.onopen = () => {
+		this.websocket.onopen = () => {
 			this.status = SocketStatus.Connected;
 			debugLog(this.shard.client, this.shard, `Reopened websocket connection!`, Color.Green);
 			debugLog(this.shard.client, this.shard, `Sending resume...`, Color.Black);
 			sendPayload(this.websocket, resumePayload(this.token, this.sessionId || '', this.lastSequence || 0));
 		};
 
-        return this;
-    };
+		return this;
+	};
 
 	/**
 	 * @description Disconnects the shard from the Discord Gateway.
@@ -87,7 +87,7 @@ export default class ShardSocket extends EventEmitter {
 	 * @param data The data to send with the close event
 	 * @returns {Promise<ShardSocket>}
 	 */
-    public async disconnect(closeEvent: GatewayCloseEvent, data: any): Promise<ShardSocket> {
+	public async disconnect(closeEvent: GatewayCloseEvent, data: any): Promise<ShardSocket> {
 		this.status = SocketStatus.Idle;
 		this.emit(GatewayEvents.Closed, closeEvent);
 
@@ -101,7 +101,7 @@ export default class ShardSocket extends EventEmitter {
 			this.websocket.close(closeEvent.code, data);
 		};
 		return this;
-    };
+	};
 
 	private onOpen() {
 		this.status = SocketStatus.Connected;
@@ -169,19 +169,19 @@ export default class ShardSocket extends EventEmitter {
 	 * @param payload The incoming payload
 	 * @description Handles incoming payloads from the Discord Gateway.
 	 */
-    private handlePayload(payload: Payload) {
-        switch (payload.code) {
-            case GatewayOperationCode.Hello: {
-                // Event
-                this.emit(GatewayEvents.Hello, payload.data.heartbeat_interval);
-                // Initialize
-                if (payload.data.heartbeat_interval) {
+	private handlePayload(payload: Payload) {
+		switch (payload.code) {
+			case GatewayOperationCode.Hello: {
+				// Event
+				this.emit(GatewayEvents.Hello, payload.data.heartbeat_interval);
+				// Initialize
+				if (payload.data.heartbeat_interval) {
 					this.heartbeatInterval = payload.data.heartbeat_interval;
-                	this.startHeartbeat(this.heartbeatInterval);
+					this.startHeartbeat(this.heartbeatInterval);
 				}
-                if (this.status !== SocketStatus.Resuming) this.sendIdentify();
-                break;
-            };
+				if (this.status !== SocketStatus.Resuming) this.sendIdentify();
+				break;
+			};
 			case GatewayOperationCode.Heartbeat: {
 				if (!this.receivedHeartbeatAck) warn(this.shard.client, this.shard, `Heartbeat ACK not received! Possibly a zombie connection.`);
 				debugLog(this.shard.client, this.shard, `Heartbeat requested`, Color.Yellow);
@@ -189,59 +189,61 @@ export default class ShardSocket extends EventEmitter {
 				this.receivedHeartbeatAck = false;
 				break;
 			}
-            case GatewayOperationCode.HeartbeatAcknowledge: {
+			case GatewayOperationCode.HeartbeatAcknowledge: {
 				let elapsed = new Date().getTime() - this.lastHeartbeat.getTime();
-                this.emit(GatewayEvents.Heartbeat, elapsed);
+				this.emit(GatewayEvents.Heartbeat, elapsed);
 				this.receivedHeartbeatAck = true;
 				this.lastHeartbeat = new Date();
-                break;
-            };
-            // Ready event
-            case GatewayOperationCode.Dispatch: { this.handleDispatch(payload); break; };
-			case GatewayOperationCode.Resume: {
-                this.emit(GatewayEvents.Resumed);
-                this.status = SocketStatus.Connected;
-                break;
-            };
-            case GatewayOperationCode.Reconnect: {
-                debugLog(this.shard.client, this.shard, `Told to reconnect.`, Color.Yellow);
-                this.resume();
-                break;
-            };
-            case GatewayOperationCode.InvalidSession: {
-                warn(this.shard.client, this.shard, "Invalid session!");
-                if (payload.data === true) this.resume();
+				break;
+			};
+			// Ready event
+			case GatewayOperationCode.Dispatch: {
+				this.lastSequence = payload.sequence || this.lastSequence;
+				this.handleDispatch(payload);
+				break;
+			};
+			case GatewayOperationCode.Reconnect: {
+				debugLog(this.shard.client, this.shard, `Told to reconnect.`, Color.Yellow);
+				this.resume();
+				break;
+			};
+			case GatewayOperationCode.InvalidSession: {
+				warn(this.shard.client, this.shard, "Invalid session!");
+				if (payload.data === true) this.resume();
 				else this.disconnect(GatewayCloseCode.Close, null);
-                break;
-            };
-            default: {
+				break;
+			};
+			default: {
 				warn(this.shard.client, this.shard, "Unhandled payload of code: " + payload.code);
 				warn(this.shard.client, this.shard, JSON.stringify(payload));
 				break;
 			}
-        }
-    };
+		}
+	};
 
 	private handleDispatch(payload: Payload) {
 		this.emit(GatewayEvents.Dispatch, payload);
 		switch (payload.name) {
 			case DispatchEvents.Ready: {
 				// Gather session info
-                this.resumeUrl = payload.data.resume_gateway_url || this.resumeUrl;
-                this.sessionId = payload.data.session_id || this.sessionId;
-                this.lastSequence = payload.sequence || this.lastSequence;
+				this.resumeUrl = payload.data.resume_gateway_url || this.resumeUrl;
+				this.sessionId = payload.data.session_id || this.sessionId;
 				this.shard.id = payload.data.shard[0] || this.shard.id;
 
 				// Send up info to the client
 				// user, guilds, application
 
-                // Event
-                this.emit(GatewayEvents.Ready);
+				// Event
+				this.emit(GatewayEvents.Ready);
 				this.status = SocketStatus.Connected;
 				break;
 
-				//setTimeout(() => { this.websocket?.close(GatewayCloseCode.UnknownError.code, ''); }, 2000);
-			}
+			};
+			case DispatchEvents.Resumed: {
+				this.emit(GatewayEvents.Resumed);
+				this.status = SocketStatus.Connected;
+				break;
+			};
 			default: {
 				warn(this.shard.client, this.shard, `Unhandled dispatch event: ${payload.name}`);
 				break;
@@ -279,36 +281,37 @@ export default class ShardSocket extends EventEmitter {
 	/**
 	 * @description Sends an identify payload to the Discord Gateway.
 	 */
-    private sendIdentify() {
+	private sendIdentify() {
 		if (this.hasAuthenticated) return warn(this.shard.client, this.shard, `Already authenticated, skipping identify!`);
-        debugLog(this.shard.client, this.shard, `Sending identify...`, Color.Black);
-        sendPayload(this.websocket, identifyPayload(this.token, this.shard.client, this.shard));
+		debugLog(this.shard.client, this.shard, `Sending identify...`, Color.Black);
+		sendPayload(this.websocket, identifyPayload(this.token, this.shard.client, this.shard));
 		this.hasAuthenticated = true;
-    };
+	};
 
 	/**
 	 * @param event The {@link CloseEvent}
 	 * @description Handles the closing of the websocket connection.
 	 */
-    private async handleClose(event: CloseEvent) {
+	private async handleClose(event: CloseEvent) {
 		let closeEvent = this.closeEvent(event.code);
 		if (!closeEvent) closeEvent = { code: event.code, recover: RecoverMethod.Disconnect };
-        this.emit(GatewayEvents.Closed, { code: closeEvent.code, recover: closeEvent.recover });
-        switch (closeEvent.code) {
-			case GatewayCloseCode.Normal.code: { debugLog(this.shard.client, this.shard, "Normal close event.", Color.Black); break; };
-			case GatewayCloseCode.Close.code: { debugLog(this.shard.client, this.shard, "Shutting down.", Color.Red); break; };
-            case GatewayCloseCode.UnknownError.code: { warn(this.shard.client, this.shard, "An unknown error occured!"); break; };
-            case GatewayCloseCode.InvalidShard.code: { return this.error("Invalid shard!", closeEvent, this.handleClose); };
-            case null: case undefined: { warn(this.shard.client, this.shard, "Closed without a code!"); break; }
-            default: {
-                warn(this.shard.client, this.shard, `Unhandled close event code: ${closeEvent.code}`);
+		this.emit(GatewayEvents.Closed, { code: closeEvent.code, recover: closeEvent.recover });
+		switch (closeEvent.code) {
+			case GatewayCloseCode.Normal.code: { debugLog(this.shard.client, this.shard, "Normal close event", Color.Black); break; };
+			case GatewayCloseCode.Close.code: { warn(this.shard.client, this.shard, "Shutting down!"); break; };
+			case GatewayCloseCode.UnknownError.code: { warn(this.shard.client, this.shard, "An unknown error occured!"); break; };
+			case GatewayCloseCode.InvalidShard.code: { return this.error("Invalid shard!", closeEvent, this.handleClose); };
+			case GatewayCloseCode.DisallowedIntents.code: { return this.error("Those intents aren't allowed!", closeEvent, this.handleClose); };
+			case null: case undefined: { warn(this.shard.client, this.shard, "Closed without a code!"); break; }
+			default: {
+				warn(this.shard.client, this.shard, `Unhandled close event code: ${closeEvent.code}`);
 				warn(this.shard.client, this.shard, JSON.stringify(event));
-                break;
-            }
-        }
-        // Recovery
+				break;
+			}
+		}
+		// Recovery
 		this.recover(closeEvent);
-    };
+	};
 
 	// Util
 
