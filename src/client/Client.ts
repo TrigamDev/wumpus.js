@@ -2,7 +2,7 @@ import EventEmitter from "eventemitter3";
 
 import Shard from "../gateway/Shard";
 import { BaseUrl, GatewayBot } from "../rest/Endpoints";
-import { AuthorizedRequest } from "../rest/RequestUtil";
+import { AuthorizedRequest } from "../rest/Request";
 import { GatewayEvents } from "../gateway/GatewayEvents";
 import { ClientEvents } from "./ClientEvents";
 
@@ -82,6 +82,13 @@ export interface ClientOptions {
     shardCount?: number;
     debugLogging?: boolean;
     // add more options in the future as needed
+}
+
+export enum ClientStatus {
+	Idle,
+	Connecting,
+	Connected,
+	Disconnected,
 }
 
 /**

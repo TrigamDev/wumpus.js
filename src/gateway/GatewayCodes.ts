@@ -25,6 +25,7 @@ export enum RecoverMethod {
 }
 
 // https://discord.com/developers/docs/topics/opcodes-and-status-codes#gateway-gateway-close-event-codes
+// https://www.rfc-editor.org/rfc/rfc6455.html#page-45
 export const GatewayCloseCode = {
 	Normal: { code: 1000, recover: RecoverMethod.Reconnect } as GatewayCloseEvent,
 	Close: { code: 1001, recover: RecoverMethod.Disconnect } as GatewayCloseEvent,

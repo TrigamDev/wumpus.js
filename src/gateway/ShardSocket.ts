@@ -5,7 +5,7 @@ import { GatewayCloseCode, GatewayCloseEvent, GatewayOperationCode, RecoverMetho
 import { GatewayVersion } from "../Constants";
 import { Color, debugLog, warn } from "../util/DebugLog";
 import { Payload, heartbeatPayload, identifyPayload, parseIncomingPayload, resumePayload, sendPayload } from "./Payload";
-import { UnauthorizedRequest } from "../rest/RequestUtil";
+import { UnauthorizedRequest } from "../rest/Request";
 import { BaseUrl, Gateway } from "../rest/Endpoints";
 import { DispatchEvents, GatewayEvents } from "./GatewayEvents";
 
