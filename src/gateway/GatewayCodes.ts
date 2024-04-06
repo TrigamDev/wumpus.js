@@ -13,7 +13,6 @@ export enum GatewayOperationCode {
     HeartbeatAcknowledge = 11,
 };
 
-// https://discord.com/developers/docs/topics/opcodes-and-status-codes#gateway-gateway-close-event-codes
 export interface GatewayCloseEvent {
     code: number;
     recover: RecoverMethod;
@@ -25,11 +24,12 @@ export enum RecoverMethod {
 	Disconnect = 2,
 }
 
+// https://discord.com/developers/docs/topics/opcodes-and-status-codes#gateway-gateway-close-event-codes
 export const GatewayCloseCode = {
 	Normal: { code: 1000, recover: RecoverMethod.Reconnect } as GatewayCloseEvent,
+	Close: { code: 1001, recover: RecoverMethod.Disconnect } as GatewayCloseEvent,
 	Resuming: { code: 4200, recover: RecoverMethod.Resume } as GatewayCloseEvent,
 	ZombieConnection: { code: 4201, recover: RecoverMethod.Reconnect } as GatewayCloseEvent,
-	JustClose: { code: 4202, recover: RecoverMethod.Disconnect } as GatewayCloseEvent,
     UnknownError: { code: 4000, recover: RecoverMethod.Resume } as GatewayCloseEvent,
     UnknownOpCode: { code: 4001, recover: RecoverMethod.Resume } as GatewayCloseEvent,
     DecodeError: { code: 4002, recover: RecoverMethod.Resume } as GatewayCloseEvent,

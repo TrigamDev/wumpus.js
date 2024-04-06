@@ -1,10 +1,14 @@
 export enum GatewayEvents {
-    Closed = 'closed',
-    Debug = 'debug',
-    Dispatch = 'dispatch',
-    Error = 'error',
-    Heartbeat = 'heartbeat',
-    Hello = 'hello',
     Ready = 'ready',
-    Resumed = 'resumed'
+    Resumed = 'resumed',
+    Closed = 'closed',
+    Error = 'error',
+    Hello = 'hello',
+    Heartbeat = 'heartbeat',
+    Dispatch = 'dispatch',
+    Debug = 'debug',
+}
+
+export enum DispatchEvents {
+	Ready = 'READY',
 }

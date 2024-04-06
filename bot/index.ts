@@ -12,4 +12,4 @@ const client = new Client(
 
 client.login(process.env.BOT_TOKEN as string);
 
-client.on('ready', () => console.log('Ready!'));
+//client.on('ready', () => console.log('Ready!'));

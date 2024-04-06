@@ -7,7 +7,7 @@ import { GatewayEvents } from "../gateway/GatewayEvents";
 import { ClientEvents } from "./ClientEvents";
 
 /**
- * A Wumpus.js client. Main entry point for interacting with Discord.
+ * @description A Wumpus.js client. Main entry point for interacting with Discord.
  * @param {number[]} intents - An array of intents.
  * @param {ClientOptions} [options] - The client options.
  */
