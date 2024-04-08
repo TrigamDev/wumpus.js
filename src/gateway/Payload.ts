@@ -12,8 +12,8 @@ export interface Payload {
 
 export function parseIncomingPayload(payload: any): Payload {
 	return {
-		code: payload.op,
-		data: payload.d,
+		code: payload?.op,
+		data: payload?.d,
 		sequence: payload?.s,
 		name: payload?.t
 	}

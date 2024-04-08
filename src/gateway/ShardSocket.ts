@@ -52,6 +52,7 @@ export default class ShardSocket extends EventEmitter {
 	 */
 	public async connect(): Promise<ShardSocket> {
 		this.status = SocketStatus.Connecting;
+		this.hasAuthenticated = false;
 		// fetch BaseUrl + Gateway and cache it to websocketUrl
 		const newUrl = await UnauthorizedRequest(BaseUrl + Gateway());
 		this.websocketUrl = newUrl.url;
@@ -90,6 +91,7 @@ export default class ShardSocket extends EventEmitter {
 	public async disconnect(closeEvent: GatewayCloseEvent, data: any): Promise<ShardSocket> {
 		this.status = SocketStatus.Idle;
 		this.emit(GatewayEvents.Closed, closeEvent);
+		super.emit(GatewayEvents.Closed, closeEvent);
 
 		// Clear intervals
 		if (this.heartbeatStart) clearTimeout(this.heartbeatStart);
@@ -117,6 +119,8 @@ export default class ShardSocket extends EventEmitter {
 
 	private onClose(event: CloseEvent) { this.handleClose(event); };
 
+	private onError(event: Event) { warn(this.shard.client, this.shard, `Error: ${event}`); };
+
 	/**
 	 * @description Connects to the Discord Gateway
 	 * @param url The url to connect to
@@ -132,6 +136,7 @@ export default class ShardSocket extends EventEmitter {
 		socket.onopen = () => this.onOpen();
 		socket.onmessage = (event) => this.onMessage(event);
 		socket.onclose = (event) => this.onClose(event as any as CloseEvent);
+		socket.onerror = (event) => this.onError(event as any as Event);
 
 		return socket;
 	};
@@ -160,6 +165,7 @@ export default class ShardSocket extends EventEmitter {
 	public error(message: string, closeEvent: GatewayCloseEvent, source: CallableFunction) {
 		let error = new GatewayError(source, message, this.shard.id, closeEvent.code, closeEvent.recover);
 		this.emit(GatewayEvents.Error, error);
+		super.emit(GatewayEvents.Error, error);
 		throw error;
 	}
 
@@ -235,6 +241,7 @@ export default class ShardSocket extends EventEmitter {
 
 				// Event
 				this.emit(GatewayEvents.Ready);
+				super.emit(GatewayEvents.Ready);
 				this.status = SocketStatus.Connected;
 				break;
 
@@ -296,6 +303,7 @@ export default class ShardSocket extends EventEmitter {
 		let closeEvent = this.closeEvent(event.code);
 		if (!closeEvent) closeEvent = { code: event.code, recover: RecoverMethod.Disconnect };
 		this.emit(GatewayEvents.Closed, { code: closeEvent.code, recover: closeEvent.recover });
+		super.emit(GatewayEvents.Closed, { code: closeEvent.code, recover: closeEvent.recover });
 		switch (closeEvent.code) {
 			case GatewayCloseCode.Normal.code: { debugLog(this.shard.client, this.shard, "Normal close event", Color.Black); break; };
 			case GatewayCloseCode.Close.code: { warn(this.shard.client, this.shard, "Shutting down!"); break; };

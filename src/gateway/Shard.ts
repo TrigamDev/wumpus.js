@@ -42,7 +42,6 @@ export default class Shard extends EventEmitter {
 
 		// Events
 		socket.on(GatewayEvents.Ready, (data: any) => {
-			this.emit(GatewayEvents.Ready, data);
 			debugLog(this.client, this, `Shard started!`, Color.Magenta);
 		});
 		socket.on(GatewayEvents.Resumed, (data: any) => {
@@ -50,11 +49,9 @@ export default class Shard extends EventEmitter {
 			debugLog(this.client, this, `Resumed!`, Color.Magenta);
 		});
 		socket.on(GatewayEvents.Closed, (event: CloseEvent) => {
-			this.emit(GatewayEvents.Closed, event);
 			debugLog(this.client, this, `Disconnecting with code: ${event.code}`, Color.Magenta);
 		});
 		socket.on(GatewayEvents.Error, (error: GatewayError) => {
-			this.emit(GatewayEvents.Error, error);
 			warn(this.client, this, `Error: ${error.message}`);
 		});
 		socket.on(GatewayEvents.Hello, (heartbeatInterval: number) => {
